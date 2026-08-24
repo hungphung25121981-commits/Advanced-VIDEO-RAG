@@ -1,9 +1,14 @@
+
+#python checkenv.py dùng này để check
+#python check_env.py --strict dùng trong CI/CD nếu mà thiếu thì dừng lại
+
+
 import argparse
 import importlib
 import sys
 import warnings
 
-# Bỏ qua các SyntaxWarning xàm từ thư viện cũ như moviepy trên Python 3.12
+# Bỏ qua các SyntaxWarning coi cho dễ
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # Danh sách các package cần kiểm tra trong pipeline
