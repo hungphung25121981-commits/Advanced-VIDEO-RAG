@@ -174,7 +174,7 @@ cd video-visual-rag
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-pip install -r requirements.txt
+pip install -r requirements.txt --no-deps -q
 pip install -e .                 # registers `src` as an importable package (also fixes VSCode import warnings)
 ```
 
@@ -182,7 +182,7 @@ Requires a CUDA GPU with ~8GB+ free VRAM for Qwen2.5-VL-8B in 4-bit NF4 (a 16GB 
 
 ```bash
 pip uninstall -y faiss-gpu faiss-cpu
-conda install -y -c pytorch -c nvidia faiss-gpu=1.7.2
+conda install -y -c pytorch -c nvidia faiss-gpu=1.5.0
 ```
 
 Place your inputs before running anything:
