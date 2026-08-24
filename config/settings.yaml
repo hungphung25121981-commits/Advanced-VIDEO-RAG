@@ -1,0 +1,109 @@
+# ============================================================
+# video-visual-rag :: config/settings.yaml
+# Single source of truth for all pipeline hyper-parameters.
+# Every module loads this file via src/utils_config.py (or its
+# own local loader) -- never hardcode magic numbers in src/.
+# ============================================================
+
+paths:
+  raw_videos_dir: "data/raw_videos"
+  video_info_dir: "data/video_info"          # one <video_id>.json per video
+  keyframes_dir: "data/keyframes"
+  keyframe_map_csv: "data/keyframe_map.csv"
+  metadata_parquet: "data/metadata.parquet"
+  faiss_index_path: "data/index/video_faiss.index"
+  bm25_corpus_path: "data/index/bm25_corpus.pkl"
+  id_map_path: "data/index/segment_id_map.pkl"
+  logs_dir: "logs"
+
+# ---------------- Phase 1: Keyframe Extraction ----------------
+phase1:
+  ssim_threshold: 0.86          # frames scoring ABOVE this vs. last kept frame are
+                                 # considered near-duplicate and dropped
+  min_scene_len_sec: 2.0        # PySceneDetect ContentDetector min scene length
+  scenedetect_threshold: 27.0   # ContentDetector sensitivity (lower = more cuts)
+  segment_window_sec: 20        # target segment length used to group keyframes
+                                 # into RAG-retrievable chunks (15-30s range)
+  segment_window_min_sec: 15
+  segment_window_max_sec: 30
+  max_keyframes_per_segment: 5
+  min_keyframes_per_segment: 3
+  jpeg_quality: 92
+  frame_resize_max_side: 1024   # resize longest side before saving (speed + storage)
+
+# ---------------- Phase 2: Captioning / OCR ----------------
+phase2:
+  vlm_model_id: "Qwen/Qwen2.5-VL-7B-Instruct"   # NOTE: Qwen2.5-VL only ships in 3B/7B/72B --
+                                                  # there is no official "8B" checkpoint (that
+                                                  # name only exists in the newer Qwen3-VL line).
+                                                  # 7B is the closest real size to what the
+                                                  # original design called for.
+  vlm_quantization: "nf4"       # bitsandbytes 4-bit NF4
+  vlm_compute_dtype: "bfloat16"
+  vlm_max_new_tokens: 220
+  vlm_temperature: 0.2
+  vlm_top_p: 0.9
+  vlm_images_per_call: 5        # representative keyframes fed per segment
+  vlm_caption_word_limit: 120
+
+  ocr_engine: "rapidocr"        # ONNXRuntime-based -- no numpy-ABI-sensitive compiled
+                                 # extensions, so it doesn't break under Kaggle's numpy 2.0.2
+                                 # base image the way paddlepaddle-gpu / paddleocr does.
+  ocr_lang: "en"
+  ocr_use_angle_cls: true
+  ocr_min_confidence: 0.55
+  ocr_dedupe_iou: 0.5           # drop overlapping duplicate OCR boxes across frames in same segment
+
+  # ---- SigLIP: fast visual-text similarity for frame_selector.py (replaces the old CLIP-ViT-B/32 slot) ----
+  siglip_model_id: "google/siglip-base-patch16-224"
+  # SigLIP projects BOTH image and text to this same dimension (must match for the dot-product
+  # similarity in visual_embedder.py to be valid -- verified against model.config.projection_dim
+  # at load time; a mismatch raises rather than silently producing wrong scores).
+  siglip_embedding_dim: 768
+  # SigLIP was trained with FIXED-length text padding (unlike CLIP's dynamic padding) -- 64 tokens
+  # is the value used by every official google/siglip-* checkpoint's processor config.
+  siglip_text_max_length: 64
+  siglip_compute_dtype: "float16"   # bfloat16 also fine on Ampere+; float16 is the safer default on T4
+  # "siglip" (fast, embedding similarity) or "middle" (free, no model call at all) -- used by
+  # frame_selector.select_best_frame() whenever use_vlm=False (the bulk/default path for `query --s`
+  # without --select-frame). Falls back to "middle" automatically if SigLIP fails to load.
+  frame_select_fast_mode: "siglip"
+
+# ---------------- Phase 3: Indexing ----------------
+phase3:
+  embedding_model_id: "BAAI/bge-m3"
+  embedding_dim: 1024
+  embedding_batch_size: 16
+  embedding_max_length: 512
+  embedding_normalize: true      # required for IndexFlatIP == cosine similarity
+  faiss_index_type: "IndexFlatIP"
+  bm25_k1: 1.5
+  bm25_b: 0.75
+  bm25_tokenizer: "simple_lower_split"  # see bm25_indexer.py
+
+# ---------------- Phase 4: Hybrid Search & RAG ----------------
+phase4:
+  dense_top_k: 20
+  sparse_top_k: 20
+  rrf_k: 60                      # Reciprocal Rank Fusion constant
+  final_top_k: 6                 # segments passed to the generator after fusion
+  max_subqueries: 4               # multi-hop decomposition cap
+  enable_multihop: true
+  generator_max_new_tokens: 512
+  generator_temperature: 0.3
+  generator_top_p: 0.9
+  min_relevance_score: 0.15       # segments below this fused score are dropped
+  timestamp_link_fallback_format: "{video_id}#t={start_time}s"
+
+  # ---- CLI: query --s/--q/--qa and `trake` ----
+  cli_top_n_default: 20            # default --top-n row count for `query --s`/`--q`
+  trake_search_top_n: 50           # candidate pool size per TRAKE stage (over-fetched then filtered to 1 video)
+  rerank_batch_size: 15            # candidates scored per VLM call in --rerank
+
+# ---------------- Runtime / Memory Management ----------------
+runtime:
+  device_map: "auto"
+  empty_cache_every_n_segments: 10
+  gc_collect_every_n_segments: 10
+  seed: 42
+  log_level: "INFO"

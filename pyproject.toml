@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "video-visual-rag"
+version = "0.1.0"
+description = "Video-native multimodal hybrid RAG system (no audio transcript) powered by a single Qwen2.5-VL-8B-Instruct model."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pyright]
+include = ["src", "main.py"]
+extraPaths = ["."]
