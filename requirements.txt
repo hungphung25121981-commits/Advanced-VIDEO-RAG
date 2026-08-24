@@ -46,7 +46,7 @@ sentence-transformers==3.2.1
 FlagEmbedding==1.3.2          # bge-m3 dense/sparse encoder
 
 # ---- Vector / lexical search ----
-faiss-gpu==1.7.2              # Kaggle T4 image ships CUDA 11.x compatible build
+faiss-gpu==1.15.              # Kaggle T4 image ships CUDA 11.x compatible build
 rank-bm25==0.2.2
 
 # ---- OCR ----
